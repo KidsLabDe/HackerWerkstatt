@@ -259,8 +259,14 @@ JSONEOF
 
   ok "Continue-Extension: $continue_config"
 
-  # Hinweis falls Continue noch nicht installiert ist
-  if ! [[ -d "$continue_dir/extensions" ]] && ! find "$HOME/.vscode/extensions" -maxdepth 1 -name "continue.*" &>/dev/null 2>&1; then
+  # Continue-Extension installieren falls code-Befehl verfügbar
+  if command -v code &>/dev/null; then
+    echo "  Installiere Continue-Extension..."
+    code --install-extension continue.continue && ok "Continue-Extension installiert" || warn "Extension-Installation fehlgeschlagen — bitte manuell installieren"
+  elif command -v code-insiders &>/dev/null; then
+    echo "  Installiere Continue-Extension (Insiders)..."
+    code-insiders --install-extension continue.continue && ok "Continue-Extension installiert" || warn "Extension-Installation fehlgeschlagen — bitte manuell installieren"
+  else
     echo ""
     echo "  Falls Continue noch nicht installiert:"
     echo "  VS Code → Extensions → 'Continue' (continue.dev) suchen und installieren"
