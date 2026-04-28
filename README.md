@@ -56,13 +56,36 @@ Du hast etwas gebaut oder eine Anleitung verbessert? Pull Requests sind willkomm
 
 ## Coding-Tools einrichten
 
-Mit diesem Einzeiler werden OpenCode und die VS-Code-Extension **Continue** installiert und für den KidsLab-Ollama-Server konfiguriert:
+Diese Scripts installieren und konfigurieren **OpenCode** und die VS-Code-Extension **Continue** für den KidsLab-Ollama-Server. Du brauchst dein KidsLab-Passwort (bekommst du im Kurs).
+
+### macOS / Linux
+
+Terminal öffnen und diesen Einzeiler eingeben:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/kidslabde/HackerWerkstatt/main/setup-client.sh)
 ```
 
-Das Script funktioniert auf **macOS** und **Linux**. Du brauchst dein KidsLab-Passwort (bekommst du im Kurs).
+### Windows
+
+**PowerShell** öffnen (Suche → `powershell` → Enter) und diesen Einzeiler eingeben:
+
+```powershell
+irm https://raw.githubusercontent.com/kidslabde/HackerWerkstatt/main/setup-client.ps1 | iex
+```
+
+> **Hinweis:** Falls eine Fehlermeldung zu Ausführungsrichtlinien erscheint, diesen Befehl zuerst ausführen:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+
+### Was passiert beim Setup?
+
+1. **OpenCode** wird installiert (KI-Coding-Assistent im Terminal)
+2. **Continue** (VS Code Extension) wird installiert und konfiguriert
+3. Beide Tools werden mit dem KidsLab-Server verbunden
+
+Vorhandene Konfigurationsdateien werden automatisch gesichert (`.bak`-Datei).
 
 ---
 

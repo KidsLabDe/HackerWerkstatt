@@ -21,7 +21,7 @@ KIDSLAB_HOST="kidslab.duckdns.org"
 KIDSLAB_BASE="https://${KIDSLAB_HOST}/api-ext"
 KIDSLAB_BASE_OPENAI="${KIDSLAB_BASE}/v1"
 DEFAULT_USER="kidslab"
-DEFAULT_MODEL="qwen3.6:35b-a3b"
+DEFAULT_MODEL="gemma4:31b"
 
 # ── Betriebssystem erkennen ───────────────────────────────────────────────────
 detect_os() {
@@ -156,14 +156,14 @@ configure_opencode() {
         }
       },
       "models": {
-        "qwen3.6:35b-a3b": {
-          "name": "Qwen 3.6 35B MoE"
-        },
         "gemma4:31b": {
           "name": "Gemma 4 31B"
         },
-        "Mistral-Small:24b": {
-          "name": "Mistral Small 24B"
+        "qwen3.6:35b-a3b": {
+          "name": "Qwen 3.6 35B MoE"
+        },
+        "qwen3-coder:30b": {
+          "name": "Qwen3 Coder 30B"
         }
       }
     }
@@ -210,17 +210,6 @@ configure_vscode() {
 {
   "models": [
     {
-      "title": "Qwen 3.6 35B MoE (Kidslab)",
-      "provider": "ollama",
-      "model": "qwen3.6:35b-a3b",
-      "apiBase": "${KIDSLAB_BASE}",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Basic ${AUTH_B64}"
-        }
-      }
-    },
-    {
       "title": "Gemma 4 31B (Kidslab)",
       "provider": "ollama",
       "model": "gemma4:31b",
@@ -232,9 +221,20 @@ configure_vscode() {
       }
     },
     {
-      "title": "Mistral Small 24B (Kidslab)",
+      "title": "Qwen 3.6 35B MoE (Kidslab)",
       "provider": "ollama",
-      "model": "Mistral-Small:24b",
+      "model": "qwen3.6:35b-a3b",
+      "apiBase": "${KIDSLAB_BASE}",
+      "requestOptions": {
+        "headers": {
+          "Authorization": "Basic ${AUTH_B64}"
+        }
+      }
+    },
+    {
+      "title": "Qwen3 Coder 30B (Kidslab)",
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
       "apiBase": "${KIDSLAB_BASE}",
       "requestOptions": {
         "headers": {
@@ -244,9 +244,9 @@ configure_vscode() {
     }
   ],
   "tabAutocompleteModel": {
-    "title": "Qwen 3.6 35B MoE (Kidslab)",
+    "title": "Qwen3 Coder 30B (Kidslab)",
     "provider": "ollama",
-    "model": "qwen3.6:35b-a3b",
+    "model": "qwen3-coder:30b",
     "apiBase": "${KIDSLAB_BASE}",
     "requestOptions": {
       "headers": {
