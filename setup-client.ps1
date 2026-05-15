@@ -56,7 +56,7 @@ function Install-OpenCode {
     # Fallback: winget (Windows 11 / aktuelles Windows 10)
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "  Installiere OpenCode via winget..."
-        winget install opencode --silent --accept-package-agreements --accept-source-agreements
+        winget install SST.opencode --silent --accept-package-agreements --accept-source-agreements
         if ($LASTEXITCODE -eq 0) {
             Write-Ok "OpenCode via winget installiert"
             return
