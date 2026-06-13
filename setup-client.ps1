@@ -71,7 +71,7 @@ function Get-ApiKey {
     } else {
         $tmpFile = [System.IO.Path]::GetTempFileName()
         Write-Host "  Lade verschlüsselte Key-Datei..."
-        Invoke-WebRequest -Uri "$REPO_RAW/opencode.key.enc" -OutFile $tmpFile -UseBasicParsing
+        Invoke-WebRequest -Uri "$REPO_RAW/files/opencode.key.enc" -OutFile $tmpFile -UseBasicParsing
         $encFile = $tmpFile
     }
 

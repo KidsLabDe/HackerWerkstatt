@@ -81,7 +81,7 @@ get_api_key() {
     tmp_file=$(mktemp)
     trap "rm -f '$tmp_file'" EXIT
     echo "  Lade verschlüsselte Key-Datei..."
-    curl -fsSL "${REPO_RAW}/opencode.key.enc" -o "$tmp_file"
+    curl -fsSL "${REPO_RAW}/files/opencode.key.enc" -o "$tmp_file"
     enc_file="$tmp_file"
   fi
 
