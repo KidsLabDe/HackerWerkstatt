@@ -1,3 +1,14 @@
+> # ⚠️ Dieses Repository ist umgezogen
+>
+> Die HackerWerkstatt wird ab sofort auf **Codeberg** gepflegt:
+>
+> ## 👉 https://codeberg.org/KidsLab/Hackerwerkstatt
+>
+> Dieses GitHub-Repository ist **archiviert** und wird **nicht mehr aktualisiert**.
+> Bitte nutzt Anleitungen, Setup-Scripts und Updates ausschließlich auf Codeberg.
+
+---
+
 # HackerWerkstatt 🔧
 
 **Technik verstehen, nicht nur benutzen.**
