@@ -1,8 +1,8 @@
 #Requires -Version 5.1
-# setup-client.ps1 — Installiert und konfiguriert OpenCode + VS Code/Continue
-# für den Kidslab Ollama-Server auf kidslab.duckdns.org
+# setup-client.ps1 — Installiert und konfiguriert OpenCode für zu Hause
+# Verwendet OpenRouter als KI-Provider (identisch zu KidsLab-Clients)
 #
-# Ausführen (direkt aus dem Web — PowerShell als Admin nicht nötig):
+# Ausführen (direkt aus dem Web):
 #   irm https://raw.githubusercontent.com/kidslabde/HackerWerkstatt/main/setup-client.ps1 | iex
 #
 # Ausführen (lokale Datei):
@@ -17,17 +17,12 @@ function Write-Err  { param($msg) Write-Host "✗ $msg" -ForegroundColor Red }
 function Write-Step { param($msg) Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
 # ── Konstanten ────────────────────────────────────────────────────────────────
-$KIDSLAB_HOST        = "kidslab.duckdns.org"
-$KIDSLAB_BASE        = "https://$KIDSLAB_HOST/api-ext"
-$KIDSLAB_BASE_OPENAI = "$KIDSLAB_BASE/v1"
-$DEFAULT_USER        = "kidslab"
-$DEFAULT_MODEL       = "gemma4:31b"
+$OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+$DEFAULT_MODEL   = "google/gemma-4-26b-a4b-it"
+$REPO_RAW        = "https://raw.githubusercontent.com/kidslabde/HackerWerkstatt/main"
 
-# ── Hilfsfunktion: Base64 ─────────────────────────────────────────────────────
-function ConvertTo-Base64Credentials {
-    param([string]$user, [string]$password)
-    [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${user}:${password}"))
-}
+# ── API-Key (wird in get_api_key gesetzt) ─────────────────────────────────────
+$script:API_KEY = ""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Schritt 1: OpenCode installieren
@@ -42,25 +37,17 @@ function Install-OpenCode {
         return
     }
 
-    # Bevorzugte Methode: npm
     if (Get-Command npm -ErrorAction SilentlyContinue) {
         Write-Host "  Installiere OpenCode via npm..."
         npm install -g opencode-ai
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok "OpenCode via npm installiert"
-            return
-        }
+        if ($LASTEXITCODE -eq 0) { Write-Ok "OpenCode via npm installiert"; return }
         Write-Warn "npm-Installation fehlgeschlagen, versuche winget..."
     }
 
-    # Fallback: winget (Windows 11 / aktuelles Windows 10)
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "  Installiere OpenCode via winget..."
         winget install SST.opencode --silent --accept-package-agreements --accept-source-agreements
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok "OpenCode via winget installiert"
-            return
-        }
+        if ($LASTEXITCODE -eq 0) { Write-Ok "OpenCode via winget installiert"; return }
     }
 
     Write-Err "OpenCode konnte nicht automatisch installiert werden."
@@ -69,50 +56,62 @@ function Install-OpenCode {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Schritt 2: Zugangsdaten abfragen und kodieren
+# Schritt 2: API-Key entschlüsseln
 # ══════════════════════════════════════════════════════════════════════════════
-function Get-KidslabCredentials {
-    Write-Step "Zugangsdaten für $KIDSLAB_HOST"
+function Get-ApiKey {
+    Write-Step "KidsLab-API-Key entschlüsseln"
+
+    # Verschlüsselte Key-Datei: zuerst lokal suchen, sonst aus Repo laden
+    $encFile = $null
+    $tmpFile = $null
+
+    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName 2>$null
+    if ($scriptDir -and (Test-Path (Join-Path $scriptDir "opencode.key.enc"))) {
+        $encFile = Join-Path $scriptDir "opencode.key.enc"
+    } else {
+        $tmpFile = [System.IO.Path]::GetTempFileName()
+        Write-Host "  Lade verschlüsselte Key-Datei..."
+        Invoke-WebRequest -Uri "$REPO_RAW/opencode.key.enc" -OutFile $tmpFile -UseBasicParsing
+        $encFile = $tmpFile
+    }
 
     Write-Host ""
-    $username = Read-Host "  Benutzername [$DEFAULT_USER]"
-    if ([string]::IsNullOrEmpty($username)) { $username = $DEFAULT_USER }
-
-    Write-Host ""
-    $securePass = Read-Host "  Passwort" -AsSecureString
+    $securePass = Read-Host "  KidsLab-Passwort" -AsSecureString
     $bstr       = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass)
-    $password   = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    $vaultPass  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
-    if ([string]::IsNullOrEmpty($password)) {
+    if ([string]::IsNullOrEmpty($vaultPass)) {
         Write-Err "Passwort darf nicht leer sein."
+        if ($tmpFile) { Remove-Item $tmpFile -ErrorAction SilentlyContinue }
         exit 1
     }
 
-    $script:AUTH_B64 = ConvertTo-Base64Credentials $username $password
+    # openssl suchen (Git for Windows oder system)
+    $opensslCmd = $null
+    foreach ($candidate in @("openssl", "C:\Program Files\Git\usr\bin\openssl.exe")) {
+        if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            $opensslCmd = $candidate; break
+        }
+    }
 
-    # Verbindung testen
-    Write-Host ""
-    Write-Host "  Teste Verbindung zum Server..."
-    try {
-        $response = Invoke-WebRequest `
-            -Uri "$KIDSLAB_BASE/api/tags" `
-            -Headers @{ Authorization = "Basic $script:AUTH_B64" } `
-            -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-        Write-Ok "Zugangsdaten korrekt (HTTP $($response.StatusCode))"
+    if (-not $opensslCmd) {
+        Write-Err "openssl nicht gefunden. Bitte Git for Windows installieren: https://git-scm.com"
+        if ($tmpFile) { Remove-Item $tmpFile -ErrorAction SilentlyContinue }
+        exit 1
     }
-    catch {
-        $code = $_.Exception.Response.StatusCode.value__
-        if (-not $code) {
-            Write-Warn "Server nicht erreichbar — Konfiguration wird trotzdem gespeichert."
-        }
-        else {
-            Write-Err "Zugangsdaten ungültig oder Server-Fehler (HTTP $code)."
-            Write-Host ""
-            $confirm = Read-Host "  Trotzdem fortfahren? [j/N]"
-            if ($confirm.ToLower() -ne "j") { exit 1 }
-        }
+
+    $script:API_KEY = & $opensslCmd enc -d -aes-256-cbc -pbkdf2 -base64 `
+                        -in $encFile -pass "pass:$vaultPass" 2>$null
+
+    if ($tmpFile) { Remove-Item $tmpFile -ErrorAction SilentlyContinue }
+
+    if ([string]::IsNullOrEmpty($script:API_KEY)) {
+        Write-Err "Falsches Passwort — API-Key konnte nicht entschlüsselt werden."
+        exit 1
     }
+
+    Write-Ok "API-Key entschlüsselt."
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -121,16 +120,15 @@ function Get-KidslabCredentials {
 function Set-OpenCodeConfig {
     Write-Step "OpenCode konfigurieren"
 
-    # OpenCode nutzt auf allen Plattformen ~/.config/opencode (XDG-Konvention)
     $configDir  = Join-Path $HOME ".config\opencode"
-    $configFile = Join-Path $configDir "config.json"
+    $configFile = Join-Path $configDir "opencode.json"
 
     New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 
     if (Test-Path $configFile) {
         $backup = "$configFile.bak.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
         Copy-Item $configFile $backup
-        Write-Warn "Bestehendes Backup: $backup"
+        Write-Warn "Backup erstellt: $backup"
     }
 
     @"
@@ -138,23 +136,24 @@ function Set-OpenCodeConfig {
   "`$schema": "https://opencode.ai/config.json",
   "provider": {
     "kidslab": {
-      "name": "Kidslab Ollama",
+      "name": "KidsLab AI",
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "baseURL": "$KIDSLAB_BASE_OPENAI",
-        "headers": {
-          "Authorization": "Basic $script:AUTH_B64"
-        }
+        "baseURL": "$OPENROUTER_BASE",
+        "apiKey": "$($script:API_KEY)"
       },
       "models": {
-        "gemma4:31b": {
-          "name": "Gemma 4 31B"
+        "google/gemma-4-26b-a4b-it": {
+          "name": "Gemma 4 (Standard)"
         },
-        "qwen3.6:35b-a3b": {
-          "name": "Qwen 3.6 35B MoE"
+        "deepseek/deepseek-chat-v3.1": {
+          "name": "DeepSeek V3.1"
         },
-        "qwen3-coder:30b": {
-          "name": "Qwen3 Coder 30B"
+        "qwen/qwen3-coder-30b-a3b-instruct": {
+          "name": "Qwen3 Coder"
+        },
+        "mistralai/mistral-small-3.2-24b-instruct": {
+          "name": "Mistral Small"
         }
       }
     }
@@ -163,105 +162,29 @@ function Set-OpenCodeConfig {
 }
 "@ | Set-Content -Path $configFile -Encoding UTF8
 
-    Write-Ok "OpenCode: $configFile"
+    Write-Ok "OpenCode konfiguriert: $configFile"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Schritt 4: VS Code / Continue-Extension konfigurieren
+# Schritt 4: Mentor-Prompt installieren
 # ══════════════════════════════════════════════════════════════════════════════
-function Set-ContinueConfig {
-    Write-Step "VS Code / Continue-Extension prüfen"
+function Set-MentorPrompt {
+    Write-Step "KidsLab Coding-Mentor installieren"
 
-    $codeFound = $false
-    if (Get-Command code          -ErrorAction SilentlyContinue) { $codeFound = $true }
-    if (Get-Command code-insiders -ErrorAction SilentlyContinue) { $codeFound = $true }
-    if (Test-Path (Join-Path $HOME ".vscode"))                    { $codeFound = $true }
-    if (Test-Path (Join-Path $HOME ".continue"))                  { $codeFound = $true }
+    $configDir  = Join-Path $HOME ".config\opencode"
+    $agentsFile = Join-Path $configDir "AGENTS.md"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 
-    if (-not $codeFound) {
-        Write-Warn "VS Code nicht gefunden — überspringe VS Code-Konfiguration."
-        return
+    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName 2>$null
+    $localMentor = if ($scriptDir) { Join-Path $scriptDir "files\opencode-mentor.md" } else { $null }
+
+    if ($localMentor -and (Test-Path $localMentor)) {
+        Copy-Item $localMentor $agentsFile
+    } else {
+        Invoke-WebRequest -Uri "$REPO_RAW/files/opencode-mentor.md" -OutFile $agentsFile -UseBasicParsing
     }
 
-    $continueDir    = Join-Path $HOME ".continue"
-    $continueConfig = Join-Path $continueDir "config.json"
-
-    New-Item -ItemType Directory -Force -Path $continueDir | Out-Null
-
-    if (Test-Path $continueConfig) {
-        $backup = "$continueConfig.bak.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        Copy-Item $continueConfig $backup
-        Write-Warn "Bestehendes Backup: $backup"
-    }
-
-    @"
-{
-  "models": [
-    {
-      "title": "Gemma 4 31B (Kidslab)",
-      "provider": "ollama",
-      "model": "gemma4:31b",
-      "apiBase": "$KIDSLAB_BASE",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Basic $script:AUTH_B64"
-        }
-      }
-    },
-    {
-      "title": "Qwen 3.6 35B MoE (Kidslab)",
-      "provider": "ollama",
-      "model": "qwen3.6:35b-a3b",
-      "apiBase": "$KIDSLAB_BASE",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Basic $script:AUTH_B64"
-        }
-      }
-    },
-    {
-      "title": "Qwen3 Coder 30B (Kidslab)",
-      "provider": "ollama",
-      "model": "qwen3-coder:30b",
-      "apiBase": "$KIDSLAB_BASE",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Basic $script:AUTH_B64"
-        }
-      }
-    }
-  ],
-  "tabAutocompleteModel": {
-    "title": "Qwen3 Coder 30B (Kidslab)",
-    "provider": "ollama",
-    "model": "qwen3-coder:30b",
-    "apiBase": "$KIDSLAB_BASE",
-    "requestOptions": {
-      "headers": {
-        "Authorization": "Basic $script:AUTH_B64"
-      }
-    }
-  }
-}
-"@ | Set-Content -Path $continueConfig -Encoding UTF8
-
-    Write-Ok "Continue-Extension: $continueConfig"
-
-    $codeCmd = $null
-    if     (Get-Command code          -ErrorAction SilentlyContinue) { $codeCmd = "code" }
-    elseif (Get-Command code-insiders -ErrorAction SilentlyContinue) { $codeCmd = "code-insiders" }
-
-    if ($codeCmd) {
-        Write-Host "  Installiere Continue-Extension..."
-        & $codeCmd --install-extension continue.continue
-        if ($LASTEXITCODE -eq 0) { Write-Ok "Continue-Extension installiert" }
-        else { Write-Warn "Extension-Installation fehlgeschlagen — bitte manuell installieren" }
-    }
-    else {
-        Write-Host ""
-        Write-Host "  Falls Continue noch nicht installiert:"
-        Write-Host "  VS Code → Extensions → 'Continue' (continue.dev) suchen und installieren"
-    }
+    Write-Ok "Mentor-Prompt installiert: $agentsFile"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -269,24 +192,22 @@ function Set-ContinueConfig {
 # ══════════════════════════════════════════════════════════════════════════════
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗"
-Write-Host "║   Kidslab Ollama — Client-Setup          ║"
+Write-Host "║   KidsLab — OpenCode Home-Setup          ║"
 Write-Host "╚══════════════════════════════════════════╝"
 Write-Host ""
 Write-Host "  Betriebssystem : Windows"
-Write-Host "  Server         : $KIDSLAB_HOST"
+Write-Host "  Provider       : OpenRouter (KidsLab AI)"
 Write-Host "  Standard-Modell: $DEFAULT_MODEL"
 
 Install-OpenCode
-Get-KidslabCredentials
+Get-ApiKey
 Set-OpenCodeConfig
-Set-ContinueConfig
+Set-MentorPrompt
 
 Write-Host ""
 Write-Host "════════════════════════════════════════════" -ForegroundColor Green
 Write-Ok "Setup abgeschlossen!"
 Write-Host ""
-Write-Host "  OpenCode starten:    opencode"
-Write-Host "  Standard-Modell:     kidslab/$DEFAULT_MODEL"
-Write-Host ""
-Write-Host "  VS Code:             Continue-Extension (Ctrl+L)"
+Write-Host "  OpenCode starten:  opencode"
+Write-Host "  Modell wechseln:   /model  (nur KidsLab-Modelle verfügbar)"
 Write-Host ""
