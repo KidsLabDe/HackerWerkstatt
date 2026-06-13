@@ -75,8 +75,8 @@ get_api_key() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
 
-  if [[ -n "$script_dir" && -f "$script_dir/opencode.key.enc" ]]; then
-    enc_file="$script_dir/opencode.key.enc"
+  if [[ -n "$script_dir" && -f "$script_dir/files/opencode.key.enc" ]]; then
+    enc_file="$script_dir/files/opencode.key.enc"
   else
     tmp_file=$(mktemp)
     trap "rm -f '$tmp_file'" EXIT
