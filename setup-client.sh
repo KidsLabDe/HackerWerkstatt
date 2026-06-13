@@ -86,11 +86,7 @@ get_api_key() {
   fi
 
   echo ""
-  if read -rs -p "  KidsLab-Passwort: " VAULT_PASS 2>/dev/null; then
-    echo ""
-  else
-    read -rp "  KidsLab-Passwort: " VAULT_PASS
-  fi
+  read -rp "  Jetzt Passwort eingeben: " VAULT_PASS
 
   if [[ -z "$VAULT_PASS" ]]; then
     err "Passwort darf nicht leer sein."

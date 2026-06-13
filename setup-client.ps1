@@ -76,10 +76,7 @@ function Get-ApiKey {
     }
 
     Write-Host ""
-    $securePass = Read-Host "  KidsLab-Passwort" -AsSecureString
-    $bstr       = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass)
-    $vaultPass  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    $vaultPass = Read-Host "  Jetzt Passwort eingeben"
 
     if ([string]::IsNullOrEmpty($vaultPass)) {
         Write-Err "Passwort darf nicht leer sein."
